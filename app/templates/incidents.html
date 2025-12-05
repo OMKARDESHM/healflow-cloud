@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hf-card">
+  <h2>Incident History</h2>
+  {% if incidents %}
+    <table class="table">
+      <tr>
+        <th>ID</th>
+        <th>Created At</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Message</th>
+      </tr>
+      {% for inc in incidents %}
+      <tr>
+        <td>{{ inc.id }}</td>
+        <td>{{ inc.created_at }}</td>
+        <td>{{ inc.incident_type }}</td>
+        <td>
+          {% if inc.status == "success" %}
+            <span class="hf-tag hf-tag-success">{{ inc.status }}</span>
+          {% else %}
+            <span class="hf-tag hf-tag-fail">{{ inc.status }}</span>
+          {% endif %}
+        </td>
+        <td>{{ inc.message }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p style="font-size:13px;color:#9ca3af;">No incidents logged yet.</p>
+  {% endif %}
+  <p style="margin-top:10px;font-size:13px;">
+    <a href="/dashboard">← Back to Dashboard</a>
+  </p>
+</div>
+{% endblock %}

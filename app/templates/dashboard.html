@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hf-grid hf-grid-2">
+  <div>
+    <div class="hf-card">
+      <h2>Run Self-Healing Validation</h2>
+      <p style="font-size:13px;color:#9ca3af;">
+        Upload a small sample dataset (CSV or JSON) and define your data contract in YAML.
+        HealFlow will validate, diagnose, and propose safe self-healing updates.
+      </p>
+
+      <form method="post" action="/run-upload" enctype="multipart/form-data">
+        <label style="font-size:13px;">File Type</label><br/>
+        <select name="file_type" class="hf-input" style="max-width:200px;">
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+        </select>
+        <br/><br/>
+
+        <label style="font-size:13px;">Data File</label><br/>
+        <input type="file" name="data_file" accept=".csv,.json" required /><br/><br/>
+
+        <label style="font-size:13px;">YAML Config</label><br/>
+        <textarea name="yaml_text" rows="18" class="hf-input" required>{{ yaml_text }}</textarea><br/><br/>
+
+        <button class="hf-btn" type="submit">Run Self-Healing Check</button>
+      </form>
+
+      {% if message %}
+        <div style="margin-top:16px;font-size:13px;">
+          {{ message }}
+        </div>
+      {% endif %}
+    </div>
+
+    {% if healed_yaml %}
+      <div class="hf-card">
+        <h3>Healed YAML (Suggested)</h3>
+        <p style="font-size:13px;color:#9ca3af;">
+          Review and copy this updated data contract into your own config files.
+          HealFlow does not auto-apply risky changes – you stay in control (HITL).
+        </p>
+        <textarea rows="18" class="hf-input" readonly>{{ healed_yaml }}</textarea>
+      </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="hf-card">
+      <h3>Account & Pipeline Summary</h3>
+      <p style="font-size:13px;color:#9ca3af;">
+        Logged in as <strong>{{ user_email }}</strong>
+      </p>
+      <p style="font-size:13px;margin-top:8px;">
+        <span class="hf-tag">Attempts: {{ metrics.attempts }}</span>
+        <span class="hf-tag hf-tag-success">Healed Successes: {{ metrics.successes }}</span>
+      </p>
+      <p style="font-size:13px;color:#9ca3af;margin-top:8px;">
+        Healing Accuracy:
+        {% if metrics.attempts > 0 %}
+          <strong>{{ (metrics.successes / metrics.attempts * 100) | round(1) }}%</strong>
+        {% else %}
+          N/A
+        {% endif %}
+      </p>
+      <p style="font-size:12px;color:#6b7280;margin-top:8px;">
+        HealFlow edits only your YAML contracts (never raw data) and always surfaces suggested changes for review.
+      </p>
+    </div>
+
+    <div class="hf-card">
+      <h3>Recent Incidents</h3>
+      {% if recent_incidents %}
+        <table class="table">
+          <tr>
+            <th>When</th>
+            <th>Type</th>
+            <th>Status</th>
+          </tr>
+          {% for inc in recent_incidents %}
+          <tr>
+            <td>{{ inc.created_at }}</td>
+            <td>{{ inc.incident_type }}</td>
+            <td>
+              {% if inc.status == "success" %}
+                <span class="hf-tag hf-tag-success">{{ inc.status }}</span>
+              {% else %}
+                <span class="hf-tag hf-tag-fail">{{ inc.status }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+        <p style="font-size:12px;margin-top:6px;">
+          <a href="/incidents">View full incident history →</a>
+        </p>
+      {% else %}
+        <p style="font-size:13px;color:#9ca3af;">No incidents yet. Run a validation to see results here.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

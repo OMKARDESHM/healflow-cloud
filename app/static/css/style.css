@@ -1,0 +1,140 @@
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+a {
+  color: #38bdf8;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.hf-header {
+  background: linear-gradient(to right, #0f172a, #1d4ed8);
+  padding: 16px 24px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.hf-header-inner h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.hf-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #cbd5f5;
+}
+
+.hf-main {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.hf-card {
+  background: #020617;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #1f2937;
+  margin-bottom: 20px;
+}
+
+.hf-card h2,
+.hf-card h3 {
+  margin-top: 0;
+  color: #f9fafb;
+}
+
+.hf-grid {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .hf-grid-2 {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+.hf-input,
+textarea,
+input[type="file"],
+select {
+  width: 100%;
+  background: #020617;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 14px;
+}
+
+textarea {
+  font-family: monospace;
+}
+
+.hf-btn {
+  background: #2563eb;
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.hf-btn:hover {
+  background: #1d4ed8;
+}
+
+.hf-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #111827;
+  border: 1px solid #1f2937;
+  margin-right: 4px;
+}
+
+.hf-tag-success {
+  border-color: #22c55e;
+  color: #4ade80;
+}
+
+.hf-tag-fail {
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid #1f2937;
+  padding: 6px 8px;
+}
+
+.table th {
+  text-align: left;
+  background: #020617;
+}
+
+.hf-footer {
+  text-align: center;
+  padding: 12px;
+  font-size: 12px;
+  color: #9ca3af;
+  border-top: 1px solid #1f2937;
+  margin-top: 40px;
+}
