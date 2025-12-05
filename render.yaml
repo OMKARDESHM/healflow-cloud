@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: healflow-cloud
+    env: docker
+    plan: free
+    region: oregon   # or virginia, choose same as dashboard
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /
+    dockerfilePath: ./Dockerfile
