@@ -1,102 +1,132 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="hf-grid hf-grid-2">
-  <div>
-    <div class="hf-card">
-      <h2>Run Self-Healing Validation</h2>
-      <p style="font-size:13px;color:#9ca3af;">
-        Upload a small sample dataset (CSV or JSON) and define your data contract in YAML.
-        HealFlow will validate, diagnose, and propose safe self-healing updates.
+<div class="space-y-6">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-semibold text-slate-50">Control Center</h1>
+      <p class="text-xs text-slate-400">
+        Overview of your pipelines, incidents, and automatic healing.
       </p>
-
-      <form method="post" action="/run-upload" enctype="multipart/form-data">
-        <label style="font-size:13px;">File Type</label><br/>
-        <select name="file_type" class="hf-input" style="max-width:200px;">
-          <option value="csv">CSV</option>
-          <option value="json">JSON</option>
-        </select>
-        <br/><br/>
-
-        <label style="font-size:13px;">Data File</label><br/>
-        <input type="file" name="data_file" accept=".csv,.json" required /><br/><br/>
-
-        <label style="font-size:13px;">YAML Config</label><br/>
-        <textarea name="yaml_text" rows="18" class="hf-input" required>{{ yaml_text }}</textarea><br/><br/>
-
-        <button class="hf-btn" type="submit">Run Self-Healing Check</button>
-      </form>
-
-      {% if message %}
-        <div style="margin-top:16px;font-size:13px;">
-          {{ message }}
-        </div>
-      {% endif %}
     </div>
-
-    {% if healed_yaml %}
-      <div class="hf-card">
-        <h3>Healed YAML (Suggested)</h3>
-        <p style="font-size:13px;color:#9ca3af;">
-          Review and copy this updated data contract into your own config files.
-          HealFlow does not auto-apply risky changes – you stay in control (HITL).
-        </p>
-        <textarea rows="18" class="hf-input" readonly>{{ healed_yaml }}</textarea>
-      </div>
-    {% endif %}
+    <div class="flex gap-2">
+      <a href="/pipelines/new" class="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-sky-500 text-slate-950 text-xs font-medium hover:bg-sky-400">
+        <i class="ph ph-plus-circle"></i> New Pipeline
+      </a>
+      <a href="/incidents" class="inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-slate-700 text-slate-200 text-xs hover:bg-slate-900/70">
+        <i class="ph ph-warning-circle"></i> View Incidents
+      </a>
+    </div>
   </div>
 
-  <div>
-    <div class="hf-card">
-      <h3>Account & Pipeline Summary</h3>
-      <p style="font-size:13px;color:#9ca3af;">
-        Logged in as <strong>{{ user_email }}</strong>
-      </p>
-      <p style="font-size:13px;margin-top:8px;">
-        <span class="hf-tag">Attempts: {{ metrics.attempts }}</span>
-        <span class="hf-tag hf-tag-success">Healed Successes: {{ metrics.successes }}</span>
-      </p>
-      <p style="font-size:13px;color:#9ca3af;margin-top:8px;">
-        Healing Accuracy:
-        {% if metrics.attempts > 0 %}
-          <strong>{{ (metrics.successes / metrics.attempts * 100) | round(1) }}%</strong>
-        {% else %}
-          N/A
-        {% endif %}
-      </p>
-      <p style="font-size:12px;color:#6b7280;margin-top:8px;">
-        HealFlow edits only your YAML contracts (never raw data) and always surfaces suggested changes for review.
-      </p>
+  <div class="grid sm:grid-cols-4 gap-4">
+    <div class="metric-card">
+      <div class="metric-label">Pipelines</div>
+      <div class="metric-value">{{ total_pipelines }}</div>
+      <div class="metric-sub">Active monitors you own</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Runs</div>
+      <div class="metric-value">{{ total_runs }}</div>
+      <div class="metric-sub">Executed validations</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Failed Runs</div>
+      <div class="metric-value text-amber-300">{{ failed_runs }}</div>
+      <div class="metric-sub">Needing attention</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Healed Runs</div>
+      <div class="metric-value text-emerald-300">{{ healed_runs }}</div>
+      <div class="metric-sub">Auto-fixed by HealFlow</div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-5">
+    <div class="lg:col-span-2 space-y-3">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="text-sm font-semibold text-slate-100">Pipelines</h2>
+        <span class="text-[11px] text-slate-500">Click to drill into config & healing history.</span>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/60">
+        <table class="min-w-full text-xs">
+          <thead class="border-b border-slate-800 text-slate-400">
+            <tr>
+              <th class="px-3 py-2 text-left font-normal">Name</th>
+              <th class="px-3 py-2 text-left font-normal">Last Status</th>
+              <th class="px-3 py-2 text-left font-normal">Last Run</th>
+              <th class="px-3 py-2 text-right font-normal">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if pipelines %}
+              {% for p in pipelines %}
+              <tr class="border-b border-slate-900/70 hover:bg-slate-900/60">
+                <td class="px-3 py-2">
+                  <div class="flex flex-col">
+                    <span class="text-slate-100 text-xs">{{ p.name }}</span>
+                    <span class="text-[11px] text-slate-500 line-clamp-1">{{ p.description or "" }}</span>
+                  </div>
+                </td>
+                <td class="px-3 py-2 text-[11px]">
+                  {% if p.last_run_status == "success" %}
+                    <span class="pill pill-success">Healthy</span>
+                  {% elif p.last_run_status == "healed" %}
+                    <span class="pill pill-healed">Healed</span>
+                  {% elif p.last_run_status == "failed" %}
+                    <span class="pill pill-failed">Failed</span>
+                  {% else %}
+                    <span class="pill pill-idle">Idle</span>
+                  {% endif %}
+                </td>
+                <td class="px-3 py-2 text-[11px] text-slate-400">
+                  {% if p.last_run_at %}
+                    {{ p.last_run_at.strftime("%Y-%m-%d %H:%M") }}
+                  {% else %}
+                    Never
+                  {% endif %}
+                </td>
+                <td class="px-3 py-2 text-right">
+                  <a href="/pipelines/{{ p.id }}" class="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-xl border border-slate-700 text-slate-200 hover:bg-slate-900">
+                    <i class="ph ph-arrow-up-right"></i> Open
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-3 py-6 text-center text-xs text-slate-500">
+                No pipelines yet. Create your first one using sample CSV and let HealFlow generate rules for you.
+              </td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <div class="hf-card">
-      <h3>Recent Incidents</h3>
-      {% if recent_incidents %}
-        <table class="table">
-          <tr>
-            <th>When</th>
-            <th>Type</th>
-            <th>Status</th>
-          </tr>
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-100">Recent Incidents</h2>
+        <a href="/incidents" class="text-[11px] text-sky-300 hover:text-sky-200">View all</a>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 space-y-2 max-h-[320px] overflow-y-auto">
+        {% if recent_incidents %}
           {% for inc in recent_incidents %}
-          <tr>
-            <td>{{ inc.created_at }}</td>
-            <td>{{ inc.incident_type }}</td>
-            <td>
-              {% if inc.status == "success" %}
-                <span class="hf-tag hf-tag-success">{{ inc.status }}</span>
-              {% else %}
-                <span class="hf-tag hf-tag-fail">{{ inc.status }}</span>
-              {% endif %}
-            </td>
-          </tr>
+          <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-2.5 text-[11px] space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-200">{{ inc.pipeline.name }}</span>
+              <span class="text-slate-500">{{ inc.created_at.strftime("%H:%M") }}</span>
+            </div>
+            <div class="flex items-center justify-between text-slate-400">
+              <span>{{ inc.stage }} · {{ inc.status }}</span>
+            </div>
+            <p class="text-slate-300">{{ inc.message }}</p>
+          </div>
           {% endfor %}
-        </table>
-        <p style="font-size:12px;margin-top:6px;">
-          <a href="/incidents">View full incident history →</a>
-        </p>
-      {% else %}
-        <p style="font-size:13px;color:#9ca3af;">No incidents yet. Run a validation to see results here.</p>
-      {% endif %}
+        {% else %}
+          <p class="text-xs text-slate-500">No incidents yet. Run a pipeline to see HealFlow in action.</p>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>

@@ -1,124 +1,50 @@
-from typing import Dict, List
+from __future__ import annotations
+from typing import Dict, Any, List, Tuple
+import yaml
 
-from .causal_log import log_causal_event
-from .validator import DataQualityError
-
-
-def diagnose_schema_drift(missing_columns: List[str], config: Dict) -> Dict:
-    pipeline_name = config.get("pipeline_name", "unknown")
-
-    diagnosis = {
-        "pipeline_name": pipeline_name,
-        "root_cause": "schema_drift",
-        "missing_columns": missing_columns,
-        "suggested_actions": [],
-    }
-
-    if "date_of_sale" in missing_columns:
-        diagnosis["suggested_actions"].append(
-            {
-                "type": "schema_update",
-                "description": "Rename required column 'date_of_sale' to 'txn_date' in YAML schema.",
-                "from": "date_of_sale",
-                "to": "txn_date",
-            }
-        )
-    else:
-        diagnosis["suggested_actions"].append(
-            {
-                "type": "no_safe_fix",
-                "description": "No known automatic remediation. Escalate to engineer.",
-            }
-        )
-
-    log_causal_event("diagnosis", diagnosis)
-    return diagnosis
+from .validator import Issue
 
 
-def apply_schema_healing(config: Dict, diagnosis: Dict) -> Dict:
-    actions = diagnosis.get("suggested_actions", [])
-    if not actions:
-        return config
+def auto_heal(
+    yaml_text: str,
+    issues: List[Issue],
+) -> Tuple[str, List[str]]:
+    """
+    Simple remediation engine:
+    - For too_many_nulls, increase max_null_fraction slightly.
+    - For other issues, log suggestions but don't auto-change.
 
-    action = actions[0]
-    if action.get("type") != "schema_update":
-        return config
+    Returns:
+      (new_yaml_text, actions_applied)
+    """
+    config = yaml.safe_load(yaml_text) or {}
+    dq = config.get("data_quality", {}) or {}
+    actions: List[str] = []
 
-    from_col = action["from"]
-    to_col = action["to"]
-
-    old_cols = config.get("schema", {}).get("required_columns", [])
-    new_cols = [to_col if c == from_col else c for c in old_cols]
-    config.setdefault("schema", {})["required_columns"] = new_cols
-
-    log_causal_event(
-        "healing_applied",
-        {
-            "action_type": "schema_update",
-            "from": from_col,
-            "to": to_col,
-            "old_required_columns": old_cols,
-            "new_required_columns": new_cols,
-        },
-    )
-
-    return config
-
-
-def diagnose_dq_issue(err: DataQualityError, config: Dict) -> Dict:
-    pipeline_name = config.get("pipeline_name", "unknown")
-
-    diag = {
-        "pipeline_name": pipeline_name,
-        "root_cause": err.kind or "dq_failure",
-        "column": err.column,
-        "observed": err.observed,
-        "threshold": err.threshold,
-        "suggested_actions": [],
-    }
-
-    if err.kind == "null_fraction" and err.column and err.observed is not None:
-        new_threshold = min(max(err.observed + 0.05, err.threshold or 0.0), 1.0)
-        diag["suggested_actions"].append(
-            {
-                "type": "dq_update_max_null",
-                "description": (
-                    f"Increase max_null_fraction for '{err.column}' "
-                    f"to {new_threshold:.3f} based on observed data."
-                ),
-                "column": err.column,
-                "new_threshold": new_threshold,
-            }
-        )
-    else:
-        diag["suggested_actions"].append(
-            {
-                "type": "no_safe_fix",
-                "description": "No automatic remediation defined. Please inspect data and rules.",
-            }
+    # handle too_many_nulls issues
+    null_issues = [i for i in issues if i.type == "too_many_nulls"]
+    if null_issues:
+        # bump max_null_fraction by a small amount (up to 0.95)
+        raw_max = dq.get("max_null_fraction", 0.2)
+        try:
+            current_max = float(raw_max)
+        except Exception:
+            current_max = 0.2
+        new_max = min(current_max + 0.15, 0.95)
+        dq["max_null_fraction"] = new_max
+        config["data_quality"] = dq
+        actions.append(
+            f"Increased max_null_fraction from {current_max:.2f} to {new_max:.2f} "
+            f"to tolerate observed null patterns."
         )
 
-    log_causal_event("dq_diagnosis", diag)
-    return diag
+    # for other issues, we only record suggestions now
+    for issue in issues:
+        if issue.type in ("missing_column", "duplicate_key", "type_mismatch"):
+            actions.append(
+                f"Suggestion: Review issue '{issue.type}' on column "
+                f"'{issue.column}' - {issue.details}"
+            )
 
-
-def apply_dq_healing(config: Dict, diagnosis: Dict) -> Dict:
-    actions = diagnosis.get("suggested_actions", [])
-    if not actions:
-        return config
-    action = actions[0]
-
-    if action.get("type") == "dq_update_max_null":
-        new_thr = action["new_threshold"]
-        config.setdefault("data_quality", {})["max_null_fraction"] = float(new_thr)
-        log_causal_event(
-            "healing_applied",
-            {
-                "action_type": "dq_update_max_null",
-                "column": action.get("column"),
-                "new_threshold": new_thr,
-            },
-        )
-        return config
-
-    return config
+    new_yaml = yaml.safe_dump(config, sort_keys=False)
+    return new_yaml, actions

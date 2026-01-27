@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid lg:grid-cols-2 gap-10 items-center">
+  <div class="space-y-6">
+    <div class="inline-flex items-center gap-2 rounded-full bg-slate-900/80 border border-sky-500/40 px-3 py-1 text-xs text-sky-300">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      Live PoC · Self-Healing Data Quality & Drift Agent
+    </div>
+    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-50 leading-tight">
+      Catch bad data <span class="bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">before</span>
+      it hits your models.
+    </h1>
+    <p class="text-sm sm:text-base text-slate-300 max-w-xl">
+      HealFlow watches your CSV-based pipelines, detects schema & quality issues, auto-tunes rules,
+      and keeps a causal memory of every incident. Built for data engineers who are tired of
+      debugging silently broken dashboards.
+    </p>
+    <div class="flex flex-wrap gap-3">
+      <a href="/login" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sky-500 text-slate-950 text-sm font-medium hover:bg-sky-400 shadow-lg shadow-sky-500/20">
+        <i class="ph ph-activity"></i> Launch console
+      </a>
+      <a href="https://github.com/OMKARDESHM/healflow-cloud" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-900/80">
+        <i class="ph ph-github-logo"></i> View source
+      </a>
+    </div>
+    <div class="grid grid-cols-3 gap-4 text-xs text-slate-300 pt-4">
+      <div class="stat-card">
+        <div class="text-slate-400">Auto-Healing Rules</div>
+        <div class="text-lg font-semibold text-slate-50">Config-Only</div>
+        <div class="text-slate-500">No code changes in your pipeline logic.</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-slate-400">Incidents</div>
+        <div class="text-lg font-semibold text-amber-300">Causal Timeline</div>
+        <div class="text-slate-500">Every failure, decision, and fix is logged.</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-slate-400">Built For</div>
+        <div class="text-lg font-semibold text-emerald-300">Data Engineering</div>
+        <div class="text-slate-500">Final-year AI & Data Science portfolio ready.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hidden lg:block">
+    <div class="rounded-3xl border border-slate-800 bg-gradient-to-b from-slate-900/80 to-slate-950/90 p-4 shadow-2xl shadow-sky-500/10">
+      <div class="flex items-center justify-between mb-3 text-xs text-slate-400">
+        <span class="inline-flex items-center gap-2">
+          <span class="inline-flex -space-x-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="w-2 h-2 rounded-full bg-red-400"></span>
+          </span>
+          Pipeline Health Snapshot
+        </span>
+        <span class="px-2 py-0.5 rounded-full bg-slate-800 text-emerald-300 text-[10px]">
+          Auto-healing: ON
+        </span>
+      </div>
+      <div class="bg-slate-950/60 rounded-2xl border border-slate-800 p-4 space-y-4">
+        <div class="flex justify-between text-xs text-slate-300">
+          <span>daily_sales_pipeline</span>
+          <span class="inline-flex items-center gap-1 text-emerald-300">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            Healthy
+          </span>
+        </div>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between text-slate-400">
+            <span>Data quality</span><span>Passed</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Drift / Nulls</span><span>Auto-tuned</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Last incident</span><span>Healed 5 min ago</span>
+          </div>
+        </div>
+        <div class="mt-3 text-[11px] text-slate-400 border-t border-slate-800 pt-3">
+          “max_null_fraction increased from 0.20 → 0.35 to tolerate new marketing campaign volume.”
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

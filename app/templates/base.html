@@ -1,24 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8" />
   <title>HealFlow Cloud</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/bold/style.css">
+  <!-- Custom CSS -->
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
-<body>
-  <header class="hf-header">
-    <div class="hf-header-inner">
-      <h1>HealFlow Cloud</h1>
-      <p class="hf-subtitle">Self-Healing Data Pipeline Validator</p>
-    </div>
-  </header>
+<body class="h-full bg-slate-950 text-slate-100">
+  <div class="min-h-screen flex flex-col">
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+      <div class="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
+        <a href="/" class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-2xl bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-slate-950 font-bold">H</div>
+          <div class="flex flex-col leading-tight">
+            <span class="font-semibold text-slate-50">HealFlow Cloud</span>
+            <span class="text-xs text-slate-400">Self-Healing Data Pipeline Observability</span>
+          </div>
+        </a>
+        <nav class="flex items-center gap-4 text-sm">
+          {% if user %}
+          <a href="/dashboard" class="link-nav">Dashboard</a>
+          <a href="/incidents" class="link-nav">Incidents</a>
+          <a href="/pipelines/new" class="link-nav">New Pipeline</a>
+          <span class="text-slate-400 text-xs hidden sm:inline">Hi, {{ user.username }}</span>
+          <a href="/logout" class="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-100">
+            <i class="ph ph-sign-out"></i> Logout
+          </a>
+          {% else %}
+          <a href="/login" class="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-slate-100 text-slate-950 font-medium hover:bg-white">
+            <i class="ph ph-user"></i> Sign in
+          </a>
+          {% endif %}
+        </nav>
+      </div>
+    </header>
 
-  <main class="hf-main">
-    {% block content %}{% endblock %}
-  </main>
+    <main class="flex-1 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <div class="max-w-6xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
 
-  <footer class="hf-footer">
-    <p>HealFlow &copy; 2025</p>
-  </footer>
+    <footer class="border-t border-slate-800 bg-slate-950">
+      <div class="max-w-6xl mx-auto px-4 py-4 text-xs text-slate-500 flex items-center justify-between">
+        <span>HealFlow Cloud · Self-healing data pipeline assistant</span>
+        <span>Built for Data Engineers & AI teams</span>
+      </div>
+    </footer>
+  </div>
 </body>
 </html>

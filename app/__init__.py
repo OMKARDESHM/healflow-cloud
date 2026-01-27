@@ -1,2 +1,1 @@
-# HealFlow Cloud package
-
+from .main import app  # for ASGI

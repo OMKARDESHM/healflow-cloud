@@ -1,237 +1,317 @@
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from datetime import date
-
-from .causal_log import log_causal_event
+import yaml
 
 
-class SchemaDriftError(Exception):
-    def __init__(self, missing_columns: List[str]):
-        self.missing_columns = missing_columns
-        super().__init__(f"Schema drift: missing columns {missing_columns}")
-
-
-class DataQualityError(Exception):
-    def __init__(
-        self,
-        message: str,
-        kind: Optional[str] = None,
-        column: Optional[str] = None,
-        observed: Optional[float] = None,
-        threshold: Optional[float] = None,
-    ):
-        self.kind = kind
-        self.column = column
-        self.observed = observed
-        self.threshold = threshold
-        super().__init__(message)
+class ConfigError(Exception):
+    """Raised when the YAML / config is invalid or incompatible."""
+    pass
 
 
 @dataclass
-class DQConfig:
-    max_null_fraction: float
-    min_row_count: int
-    required_columns: List[str]
-    unique_keys: List[str]
-    column_types: Dict[str, str]
-    allowed_values: Dict[str, List[str]]
-    freshness_date_column: Optional[str]
-    freshness_max_days_delay: Optional[int]
+class Issue:
+    type: str
+    severity: str
+    column: Optional[str]
+    details: str
 
 
-def build_dq_config(config: Dict) -> DQConfig:
-    dq = config.get("data_quality", {})
-    schema = config.get("schema", {})
+class DataQualityError(Exception):
+    """Raised when data quality checks fail."""
 
-    max_null_fraction = float(dq.get("max_null_fraction", 1.0))
-    min_row_count = int(dq.get("min_row_count", 0))
-    required_columns = list(schema.get("required_columns", []))
-    unique_keys = list(dq.get("unique_keys", []))
-    column_types = schema.get("column_types", {}) or {}
-    allowed_values = config.get("allowed_values", {}) or {}
-
-    freshness_cfg = config.get("freshness", {}) or {}
-    freshness_date_column = freshness_cfg.get("date_column")
-    freshness_max_days_delay = freshness_cfg.get("max_days_delay")
-
-    return DQConfig(
-        max_null_fraction=max_null_fraction,
-        min_row_count=min_row_count,
-        required_columns=required_columns,
-        unique_keys=unique_keys,
-        column_types=column_types,
-        allowed_values=allowed_values,
-        freshness_date_column=freshness_date_column,
-        freshness_max_days_delay=freshness_max_days_delay,
-    )
+    def __init__(self, issues: List[Issue]):
+        self.issues = issues
+        super().__init__("; ".join(i.details for i in issues))
 
 
-def _check_row_count(df: pd.DataFrame, cfg: DQConfig, pipeline_name: str):
-    if len(df) < cfg.min_row_count:
-        msg = f"Row count {len(df)} < min_row_count {cfg.min_row_count}"
-        log_causal_event(
-            "dq_failure",
-            {"pipeline_name": pipeline_name, "reason": "row_count", "message": msg},
+def load_config_yaml(yaml_text: str) -> Dict[str, Any]:
+    try:
+        cfg = yaml.safe_load(yaml_text) or {}
+    except yaml.YAMLError as e:
+        raise ConfigError(f"Invalid YAML: {e}")
+    if not isinstance(cfg, dict):
+        raise ConfigError("Root of YAML config must be a mapping.")
+    return cfg
+
+
+def build_dq_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    dq = config.get("data_quality", {}) or {}
+
+    # min_row_count
+    raw_min_rows = dq.get("min_row_count", 0)
+    try:
+        min_row_count = int(raw_min_rows)
+    except (TypeError, ValueError):
+        raise ConfigError(
+            f"data_quality.min_row_count must be an integer, got: {raw_min_rows!r}"
         )
-        raise DataQualityError(msg, kind="row_count", observed=len(df), threshold=cfg.min_row_count)
 
+    # max_null_fraction: scalar OR mapping (we collapse mapping to strictest)
+    raw_max_null = dq.get("max_null_fraction", 1.0)
 
-def _check_null_fraction(df: pd.DataFrame, cfg: DQConfig, pipeline_name: str):
-    col = "sales_amount"
-    if col in df.columns:
-        null_frac = df[col].isna().mean()
-        if null_frac > cfg.max_null_fraction:
-            msg = f"Null fraction in '{col}' {null_frac:.4f} > max_null_fraction {cfg.max_null_fraction}"
-            log_causal_event(
-                "dq_failure",
-                {
-                    "pipeline_name": pipeline_name,
-                    "reason": "null_fraction",
-                    "column": col,
-                    "observed": null_frac,
-                    "threshold": cfg.max_null_fraction,
-                    "message": msg,
-                },
+    if isinstance(raw_max_null, dict):
+        try:
+            values = [float(v) for v in raw_max_null.values()]
+        except (TypeError, ValueError):
+            raise ConfigError(
+                "data_quality.max_null_fraction mapping must contain only numbers, "
+                f"got: {raw_max_null!r}"
             )
-            raise DataQualityError(
-                msg,
-                kind="null_fraction",
-                column=col,
-                observed=float(null_frac),
-                threshold=cfg.max_null_fraction,
+        max_null_fraction = min(values) if values else 1.0
+    else:
+        try:
+            max_null_fraction = float(raw_max_null)
+        except (TypeError, ValueError):
+            raise ConfigError(
+                "data_quality.max_null_fraction must be a number or mapping of column→number, "
+                f"got: {raw_max_null!r}"
             )
 
+    column_types = dq.get("column_types", {}) or {}
+    unique_keys = dq.get("unique_keys", []) or []
+    allowed_values = dq.get("allowed_values", {}) or {}
 
-def _check_schema(df: pd.DataFrame, cfg: DQConfig, pipeline_name: str):
-    missing = [c for c in cfg.required_columns if c not in df.columns]
-    if missing:
-        log_causal_event(
-            "schema_drift_detected",
-            {"pipeline_name": pipeline_name, "missing_columns": missing},
-        )
-        raise SchemaDriftError(missing)
+    freshness_cfg = dq.get("freshness", {}) or {}
+    freshness = {
+        "date_column": freshness_cfg.get("date_column"),
+        "max_days_delay": freshness_cfg.get("max_days_delay", None),
+    }
+
+    return {
+        "min_row_count": min_row_count,
+        "max_null_fraction": max_null_fraction,
+        "column_types": column_types,
+        "unique_keys": unique_keys,
+        "allowed_values": allowed_values,
+        "freshness": freshness,
+    }
 
 
-def _check_uniqueness(df: pd.DataFrame, cfg: DQConfig, pipeline_name: str):
-    for col in cfg.unique_keys:
-        if col in df.columns:
-            dup_count = df[col].duplicated().sum()
-            if dup_count > 0:
-                msg = f"Uniqueness violation in '{col}': {dup_count} duplicates"
-                log_causal_event(
-                    "dq_failure",
-                    {
-                        "pipeline_name": pipeline_name,
-                        "reason": "uniqueness",
-                        "column": col,
-                        "duplicates": int(dup_count),
-                        "message": msg,
-                    },
+def ensure_required_columns(df: pd.DataFrame, config: Dict[str, Any]) -> List[Issue]:
+    schema = config.get("schema", {}) or {}
+    required = schema.get("required_columns", []) or []
+    issues: List[Issue] = []
+    for col in required:
+        if col not in df.columns:
+            issues.append(
+                Issue(
+                    type="missing_column",
+                    severity="high",
+                    column=col,
+                    details=f"Required column '{col}' is missing from data.",
                 )
-                raise DataQualityError(msg, kind="uniqueness", column=col)
+            )
+    return issues
 
 
-def _check_column_types(df: pd.DataFrame, cfg: DQConfig, pipeline_name: str):
-    for col, expected_type in cfg.column_types.items():
+def check_min_row_count(df: pd.DataFrame, dq_cfg: Dict[str, Any]) -> List[Issue]:
+    issues: List[Issue] = []
+    min_rows = dq_cfg["min_row_count"]
+    if len(df) < min_rows:
+        issues.append(
+            Issue(
+                type="too_few_rows",
+                severity="high",
+                column=None,
+                details=f"Row count {len(df)} < min_row_count {min_rows}.",
+            )
+        )
+    return issues
+
+
+def check_nulls(df: pd.DataFrame, dq_cfg: Dict[str, Any]) -> List[Issue]:
+    issues: List[Issue] = []
+    max_null = dq_cfg["max_null_fraction"]
+    for col in df.columns:
+        frac_null = df[col].isna().mean()
+        if frac_null > max_null:
+            issues.append(
+                Issue(
+                    type="too_many_nulls",
+                    severity="medium",
+                    column=col,
+                    details=f"Null fraction in '{col}' {frac_null:.3f} > max_null_fraction {max_null}.",
+                )
+            )
+    return issues
+
+
+def check_unique_keys(df: pd.DataFrame, dq_cfg: Dict[str, Any]) -> List[Issue]:
+    issues: List[Issue] = []
+    unique_keys = dq_cfg["unique_keys"] or []
+    for key_col in unique_keys:
+        if key_col in df.columns:
+            dup_count = df[key_col].duplicated().sum()
+            if dup_count > 0:
+                issues.append(
+                    Issue(
+                        type="duplicate_key",
+                        severity="high",
+                        column=key_col,
+                        details=f"Uniqueness violation in '{key_col}': {dup_count} duplicates.",
+                    )
+                )
+    return issues
+
+
+def check_allowed_values(df: pd.DataFrame, dq_cfg: Dict[str, Any]) -> List[Issue]:
+    issues: List[Issue] = []
+    allowed_values = dq_cfg["allowed_values"] or {}
+    for col, allowed in allowed_values.items():
+        if col not in df.columns:
+            continue
+        non_null = df[col].dropna()
+        invalid = non_null[~non_null.isin(allowed)]
+        if not invalid.empty:
+            examples = invalid.unique()[:5]
+            issues.append(
+                Issue(
+                    type="invalid_value",
+                    severity="medium",
+                    column=col,
+                    details=f"Column '{col}' contains values outside allowed set: {list(examples)}",
+                )
+            )
+    return issues
+
+
+def check_column_types(df: pd.DataFrame, dq_cfg: Dict[str, Any]) -> List[Issue]:
+    issues: List[Issue] = []
+    types_map = dq_cfg["column_types"] or {}
+
+    for col, expected_type in types_map.items():
         if col not in df.columns:
             continue
         series = df[col]
-        try:
-            if expected_type == "float":
-                pd.to_numeric(series, errors="raise")
-            elif expected_type == "int":
-                pd.to_numeric(series, errors="raise", downcast="integer")
-            elif expected_type == "str":
-                series.astype(str)
-        except Exception:
-            msg = f"Type check failed for '{col}' (expected {expected_type})"
-            log_causal_event(
-                "dq_failure",
-                {
-                    "pipeline_name": pipeline_name,
-                    "reason": "type_mismatch",
-                    "column": col,
-                    "expected_type": expected_type,
-                    "message": msg,
-                },
+        if expected_type == "int":
+            # allow NaNs but non-integers are an issue
+            bad = series.dropna().apply(lambda x: not float(x).is_integer())
+            if bad.any():
+                issues.append(
+                    Issue(
+                        type="type_mismatch",
+                        severity="medium",
+                        column=col,
+                        details=f"Type check failed for '{col}' (expected int).",
+                    )
+                )
+        elif expected_type == "float":
+            try:
+                series.astype(float)
+            except Exception:
+                issues.append(
+                    Issue(
+                        type="type_mismatch",
+                        severity="medium",
+                        column=col,
+                        details=f"Type check failed for '{col}' (expected float).",
+                    )
+                )
+        elif expected_type == "datetime":
+            try:
+                pd.to_datetime(series, errors="raise")
+            except Exception:
+                issues.append(
+                    Issue(
+                        type="type_mismatch",
+                        severity="medium",
+                        column=col,
+                        details=f"Type check failed for '{col}' (expected datetime).",
+                    )
+                )
+        # You can add more types (string, bool, etc.)
+
+    return issues
+
+
+def check_freshness(df: pd.DataFrame, dq_cfg: Dict[str, Any]) -> List[Issue]:
+    issues: List[Issue] = []
+    freshness = dq_cfg["freshness"]
+    date_col = freshness.get("date_column")
+    max_delay = freshness.get("max_days_delay")
+    if not date_col or max_delay is None:
+        return issues
+    if date_col not in df.columns:
+        issues.append(
+            Issue(
+                type="freshness_missing_column",
+                severity="low",
+                column=date_col,
+                details=f"Freshness date column '{date_col}' not present in data.",
             )
-            raise DataQualityError(msg, kind="type_mismatch", column=col)
+        )
+        return issues
 
-
-def _check_allowed_values(df: pd.DataFrame, cfg: DQConfig, pipeline_name: str):
-    for col, allowed in cfg.allowed_values.items():
-        if col not in df.columns:
-            continue
-        bad_values = sorted(set(df[col].dropna().unique()) - set(allowed))
-        if bad_values:
-            msg = f"Column '{col}' has unexpected values: {bad_values}"
-            log_causal_event(
-                "dq_failure",
-                {
-                    "pipeline_name": pipeline_name,
-                    "reason": "allowed_values",
-                    "column": col,
-                    "unexpected_values": bad_values,
-                    "allowed": allowed,
-                    "message": msg,
-                },
-            )
-            raise DataQualityError(msg, kind="allowed_values", column=col)
-
-
-def _check_freshness(df: pd.DataFrame, cfg: DQConfig, pipeline_name: str):
-    if not cfg.freshness_date_column or not cfg.freshness_max_days_delay:
-        return
-    col = cfg.freshness_date_column
-    if col not in df.columns:
-        return
     try:
-        dt_series = pd.to_datetime(df[col])
-        max_date = dt_series.max().date()
-        today = date.today()
-        delta_days = (today - max_date).days
-        if delta_days > cfg.freshness_max_days_delay:
-            msg = (
-                f"Freshness violation: latest {col}={max_date} is {delta_days} days "
-                f"old (max allowed {cfg.freshness_max_days_delay})"
-            )
-            log_causal_event(
-                "dq_failure",
-                {
-                    "pipeline_name": pipeline_name,
-                    "reason": "freshness",
-                    "column": col,
-                    "latest_date": str(max_date),
-                    "delta_days": int(delta_days),
-                    "threshold_days": cfg.freshness_max_days_delay,
-                    "message": msg,
-                },
-            )
-            raise DataQualityError(
-                msg,
-                kind="freshness",
-                column=col,
-                observed=float(delta_days),
-                threshold=float(cfg.freshness_max_days_delay),
-            )
+        dates = pd.to_datetime(df[date_col], errors="coerce")
     except Exception:
-        # ignore parsing issues for freshness for now
-        pass
+        issues.append(
+            Issue(
+                type="freshness_parse_error",
+                severity="medium",
+                column=date_col,
+                details=f"Could not parse '{date_col}' as datetime for freshness check.",
+            )
+        )
+        return issues
+
+    max_date = dates.max()
+    if pd.isna(max_date):
+        issues.append(
+            Issue(
+                type="freshness_all_null",
+                severity="medium",
+                column=date_col,
+                details=f"All values in '{date_col}' are null or invalid; cannot check freshness.",
+            )
+        )
+        return issues
+
+    now = datetime.utcnow()
+    age_days = (now - max_date.to_pydatetime()).days
+    if age_days > max_delay:
+        issues.append(
+            Issue(
+                type="stale_data",
+                severity="medium",
+                column=date_col,
+                details=f"Latest '{date_col}' is {age_days} days old (> max_days_delay {max_delay}).",
+            )
+        )
+    return issues
 
 
-def run_validation(df: pd.DataFrame, config: Dict, pipeline_name: str):
+def run_validation(
+    df: pd.DataFrame,
+    yaml_text: str,
+    pipeline_name: str = "pipeline",
+) -> Dict[str, Any]:
+    """
+    Core engine: validates data against YAML config.
+    Returns summary dict. Raises DataQualityError if issues found.
+    """
+    config = load_config_yaml(yaml_text)
     dq_cfg = build_dq_config(config)
 
-    _check_row_count(df, dq_cfg, pipeline_name)
-    _check_null_fraction(df, dq_cfg, pipeline_name)
-    _check_schema(df, dq_cfg, pipeline_name)
-    _check_uniqueness(df, dq_cfg, pipeline_name)
-    _check_column_types(df, dq_cfg, pipeline_name)
-    _check_allowed_values(df, dq_cfg, pipeline_name)
-    _check_freshness(df, dq_cfg, pipeline_name)
+    issues: List[Issue] = []
 
-    log_causal_event(
-        "validation_success", {"pipeline_name": pipeline_name, "rows": len(df)}
-    )
+    issues += ensure_required_columns(df, config)
+    issues += check_min_row_count(df, dq_cfg)
+    issues += check_nulls(df, dq_cfg)
+    issues += check_unique_keys(df, dq_cfg)
+    issues += check_allowed_values(df, dq_cfg)
+    issues += check_column_types(df, dq_cfg)
+    issues += check_freshness(df, dq_cfg)
+
+    if issues:
+        raise DataQualityError(issues)
+
+    return {
+        "pipeline_name": pipeline_name,
+        "rows": len(df),
+        "message": "Data quality checks passed.",
+    }

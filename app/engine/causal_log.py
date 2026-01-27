@@ -1,18 +1,33 @@
-import json
-from datetime import datetime
-from pathlib import Path
-from typing import Dict
+from typing import Optional, List
+from sqlalchemy.orm import Session
 
-LOGS_DIR = Path("logs")
-LOGS_DIR.mkdir(exist_ok=True)
-CAUSAL_LOG_PATH = LOGS_DIR / "causal_memory.log"
+from .. import models
+from .validator import Issue
 
 
-def log_causal_event(event_type: str, details: Dict) -> None:
-    event = {
-        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        "event_type": event_type,
-        **details,
-    }
-    with open(CAUSAL_LOG_PATH, "a") as f:
-        f.write(json.dumps(event) + "\n")
+def log_incident(
+    db: Session,
+    pipeline: models.Pipeline,
+    run: Optional[models.PipelineRun],
+    stage: str,
+    status: str,
+    message: str,
+    details: Optional[str] = None,
+):
+    incident = models.Incident(
+        pipeline_id=pipeline.id,
+        run_id=run.id if run else None,
+        stage=stage,
+        status=status,
+        message=message,
+        details=details,
+    )
+    db.add(incident)
+    db.commit()
+
+
+def issues_to_text(issues: List[Issue]) -> str:
+    lines = []
+    for i in issues:
+        lines.append(f"[{i.severity.upper()}] {i.type} ({i.column}): {i.details}")
+    return "\n".join(lines)

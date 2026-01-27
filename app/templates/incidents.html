@@ -1,37 +1,65 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="hf-card">
-  <h2>Incident History</h2>
-  {% if incidents %}
-    <table class="table">
-      <tr>
-        <th>ID</th>
-        <th>Created At</th>
-        <th>Type</th>
-        <th>Status</th>
-        <th>Message</th>
-      </tr>
-      {% for inc in incidents %}
-      <tr>
-        <td>{{ inc.id }}</td>
-        <td>{{ inc.created_at }}</td>
-        <td>{{ inc.incident_type }}</td>
-        <td>
-          {% if inc.status == "success" %}
-            <span class="hf-tag hf-tag-success">{{ inc.status }}</span>
-          {% else %}
-            <span class="hf-tag hf-tag-fail">{{ inc.status }}</span>
-          {% endif %}
-        </td>
-        <td>{{ inc.message }}</td>
-      </tr>
-      {% endfor %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-50">Incidents Timeline</h1>
+      <p class="text-xs text-slate-400">
+        Every failure, healing action, and config issue – across all your pipelines.
+      </p>
+    </div>
+    <a href="/dashboard" class="link-nav text-[11px]">Back to dashboard</a>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-950/60">
+    <table class="min-w-full text-[11px]">
+      <thead class="border-b border-slate-800 text-slate-400">
+        <tr>
+          <th class="px-3 py-2 text-left font-normal">Time</th>
+          <th class="px-3 py-2 text-left font-normal">Pipeline</th>
+          <th class="px-3 py-2 text-left font-normal">Stage</th>
+          <th class="px-3 py-2 text-left font-normal">Status</th>
+          <th class="px-3 py-2 text-left font-normal">Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if incidents %}
+          {% for inc in incidents %}
+          <tr class="border-b border-slate-900/70 hover:bg-slate-900/60">
+            <td class="px-3 py-2 text-slate-300">
+              {{ inc.created_at.strftime("%Y-%m-%d %H:%M") }}
+            </td>
+            <td class="px-3 py-2 text-slate-200">
+              {{ inc.pipeline.name }}
+            </td>
+            <td class="px-3 py-2 text-slate-300">
+              {{ inc.stage }}
+            </td>
+            <td class="px-3 py-2">
+              {% if inc.status == "success" %}
+                <span class="pill pill-success">Success</span>
+              {% elif inc.status == "healed" %}
+                <span class="pill pill-healed">Healed</span>
+              {% elif inc.status == "failed" %}
+                <span class="pill pill-failed">Failed</span>
+              {% else %}
+                <span class="pill pill-idle">{{ inc.status }}</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 text-slate-300">
+              {{ inc.message }}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="5" class="px-3 py-6 text-center text-slate-500">
+            No incidents yet. Run some pipelines to populate this timeline.
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
     </table>
-  {% else %}
-    <p style="font-size:13px;color:#9ca3af;">No incidents logged yet.</p>
-  {% endif %}
-  <p style="margin-top:10px;font-size:13px;">
-    <a href="/dashboard">← Back to Dashboard</a>
-  </p>
+  </div>
 </div>
 {% endblock %}

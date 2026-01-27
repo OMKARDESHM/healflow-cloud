@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      {% if pipeline %}
+        <h1 class="text-xl font-semibold text-slate-50">{{ pipeline.name }}</h1>
+        <p class="text-xs text-slate-400">
+          {{ pipeline.description or "Config-driven self-healing pipeline." }}
+        </p>
+      {% else %}
+        <h1 class="text-xl font-semibold text-slate-50">New Pipeline</h1>
+        <p class="text-xs text-slate-400">
+          Upload a sample CSV and HealFlow will propose YAML rules for you.
+        </p>
+      {% endif %}
+    </div>
+    {% if pipeline %}
+    <div class="flex items-center gap-2">
+      {% if pipeline.last_run_status == "success" %}
+        <span class="pill pill-success">Healthy</span>
+      {% elif pipeline.last_run_status == "healed" %}
+        <span class="pill pill-healed">Healed</span>
+      {% elif pipeline.last_run_status == "failed" %}
+        <span class="pill pill-failed">Failed</span>
+      {% else %}
+        <span class="pill pill-idle">Idle</span>
+      {% endif %}
+      <a href="/dashboard" class="link-nav text-[11px]">Back to dashboard</a>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if not pipeline %}
+  <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+      <div>
+        <label class="block text-xs text-slate-300 mb-1">Pipeline name</label>
+        <input name="name" class="input-field" placeholder="daily_sales_pipeline" required />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-300 mb-1">Description</label>
+        <textarea name="description" class="input-field min-h-[60px]" placeholder="Short explanation of this pipeline and its data source."></textarea>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-300 mb-1">Sample CSV file</label>
+        <input type="file" name="sample_file" accept=".csv" class="block w-full text-xs text-slate-200" required />
+        <p class="text-[11px] text-slate-500 mt-1">
+          HealFlow will infer schema & generate YAML rules based on this sample.
+        </p>
+      </div>
+      <button class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-sky-500 text-slate-950 text-xs font-medium hover:bg-sky-400">
+        <i class="ph ph-magic-wand"></i> Generate pipeline from sample
+      </button>
+    </form>
+  </div>
+  {% else %}
+  <div class="grid lg:grid-cols-2 gap-4">
+    <div class="space-y-3">
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold text-slate-50">Run pipeline</h2>
+          <span class="text-[11px] text-slate-500">Upload CSV snapshot</span>
+        </div>
+        <form method="post" enctype="multipart/form-data" action="/pipelines/{{ pipeline.id }}/run" class="space-y-3">
+          <div>
+            <input type="file" name="data_file" accept=".csv" class="block w-full text-xs text-slate-200" required />
+            <p class="text-[11px] text-slate-500 mt-1">
+              HealFlow will validate, auto-heal if safe, and log a causal incident.
+            </p>
+          </div>
+          <button class="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400">
+            <i class="ph ph-play-circle"></i> Run validation & healing
+          </button>
+        </form>
+        {% if message %}
+        <div class="mt-3 text-[11px] text-slate-200 bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2">
+          {{ message }}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold text-slate-50">Recent runs</h2>
+        </div>
+        <div class="max-h-[260px] overflow-y-auto">
+          <table class="min-w-full text-[11px]">
+            <thead class="border-b border-slate-800 text-slate-400">
+              <tr>
+                <th class="px-2 py-1 text-left font-normal">Time</th>
+                <th class="px-2 py-1 text-left font-normal">Status</th>
+                <th class="px-2 py-1 text-left font-normal">Rows</th>
+                <th class="px-2 py-1 text-left font-normal">Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if runs %}
+                {% for r in runs %}
+                <tr class="border-b border-slate-900/70 hover:bg-slate-900/60">
+                  <td class="px-2 py-1 text-slate-300">
+                    {{ r.run_at.strftime("%Y-%m-%d %H:%M") }}
+                  </td>
+                  <td class="px-2 py-1">
+                    {% if r.status == "success" %}
+                      <span class="pill pill-success">Success</span>
+                    {% elif r.status == "healed" %}
+                      <span class="pill pill-healed">Healed</span>
+                    {% else %}
+                      <span class="pill pill-failed">Failed</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-2 py-1 text-slate-300">{{ r.rows or "-" }}</td>
+                  <td class="px-2 py-1 text-slate-400 line-clamp-2">{{ r.message }}</td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="4" class="px-2 py-4 text-center text-slate-500">
+                    No runs for this pipeline yet.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+        <h2 class="text-sm font-semibold text-slate-50 mb-2">Recent incidents</h2>
+        <div class="max-h-[220px] overflow-y-auto space-y-2 text-[11px]">
+          {% if incidents %}
+            {% for inc in incidents %}
+            <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-2">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-slate-200">{{ inc.stage }} · {{ inc.status }}</span>
+                <span class="text-slate-500">{{ inc.created_at.strftime("%H:%M") }}</span>
+              </div>
+              <p class="text-slate-300">{{ inc.message }}</p>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-slate-500">No incidents yet – run the pipeline to see the causal memory.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-3">
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold text-slate-50">Config (YAML)</h2>
+          <span class="text-[11px] text-slate-500">Config-only auto-healing</span>
+        </div>
+        <form method="post" action="/pipelines/{{ pipeline.id }}/update-config" class="space-y-2">
+          <textarea name="config_yaml" class="input-field font-mono text-[11px] min-h-[280px]">{{ config_yaml }}</textarea>
+          <button class="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-800 text-slate-100 text-[11px] hover:bg-slate-700">
+            <i class="ph ph-floppy-disk"></i> Save config version
+          </button>
+        </form>
+        <p class="text-[10px] text-slate-500 mt-2">
+          HealFlow never edits your code – only YAML. Every healing action becomes a new config version.
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

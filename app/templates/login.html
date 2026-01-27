@@ -1,22 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="hf-card" style="max-width:420px;margin:40px auto;">
-  <h2>Login / Signup</h2>
-  <p style="font-size:13px;color:#9ca3af;">
-    Use your email and a password to create an account or log in.
-  </p>
-  <form method="post" action="/login">
-    <label style="font-size:13px;">Email</label><br/>
-    <input class="hf-input" type="email" name="username" required /><br/><br/>
-
-    <label style="font-size:13px;">Password</label><br/>
-    <input class="hf-input" type="password" name="password" required /><br/><br/>
-
-    <button class="hf-btn" type="submit">Continue</button>
-  </form>
-
-  {% if error %}
-    <p style="color:#f87171;margin-top:10px;font-size:13px;">{{ error }}</p>
-  {% endif %}
+<div class="max-w-md mx-auto mt-10">
+  <div class="rounded-3xl bg-slate-900/80 border border-slate-800 p-6 shadow-xl shadow-slate-900/60">
+    <h2 class="text-xl font-semibold text-slate-50 mb-1">Sign in to HealFlow</h2>
+    <p class="text-xs text-slate-400 mb-4">
+      Use any username/password. First login will create your account.
+    </p>
+    {% if error %}
+      <div class="mb-4 text-xs text-red-300 bg-red-950/40 border border-red-700/40 rounded-xl px-3 py-2">
+        {{ error }}
+      </div>
+    {% endif %}
+    <form method="post" class="space-y-4">
+      <div>
+        <label class="block text-xs text-slate-300 mb-1">Username</label>
+        <input name="username" class="input-field" required />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-300 mb-1">Password</label>
+        <input type="password" name="password" class="input-field" required />
+      </div>
+      <button class="w-full mt-2 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-sky-500 text-slate-950 text-sm font-medium hover:bg-sky-400">
+        <i class="ph ph-sign-in"></i> Continue
+      </button>
+    </form>
+  </div>
 </div>
 {% endblock %}
